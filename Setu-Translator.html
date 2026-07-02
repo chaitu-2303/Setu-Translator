@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Setu — Translate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+Telugu:wght@400;500;600&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #12121c;
+    --panel: #1a1b2b;
+    --panel-alt: #21223a;
+    --bubble-user: #2a2c46;
+    --bubble-assistant: #1a1b2b;
+    --accent: #f2a541;
+    --accent-dim: rgba(242,165,65,0.14);
+    --teal: #34d1b0;
+    --text: #f3f1ea;
+    --muted: #8d90ab;
+    --border: rgba(255,255,255,0.08);
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    overflow: hidden;
+  }
+
+  body{
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.3rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .brand{
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 1.3rem;
+  }
+
+  .brand .setu{ color: var(--accent); }
+  .brand .sub{ font-size: 0.78rem; color: var(--muted); font-weight: 400; font-family: 'Inter', sans-serif; }
+
+  .lang-controls{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  select{
+    background: var(--panel-alt);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.85rem;
+    font-family: inherit;
+  }
+
+  select:focus, button:focus, textarea:focus{
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  #swapBtn{
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid rgba(242,165,65,0.35);
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.25s ease, background 0.25s ease;
+    flex-shrink: 0;
+  }
+
+  #swapBtn:hover{ background: var(--accent); color: #12121c; transform: rotate(180deg); }
+
+  /* ---------- Chat feed ---------- */
+  .feed-wrap{
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 1rem 1rem;
+  }
+
+  .feed{
+    max-width: 760px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.3rem;
+  }
+
+  .empty-state{
+    margin: auto;
+    text-align: center;
+    color: var(--muted);
+    max-width: 420px;
+    padding-top: 12vh;
+  }
+
+  .empty-state .morph{
+    position: relative;
+    display: inline-block;
+    min-width: 8ch;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 2.2rem;
+    color: var(--text);
+    height: 2.6rem;
+  }
+
+  .empty-state .morph span{
+    position: absolute; left: 0; right: 0; top: 0;
+    opacity: 0; transition: opacity 0.6s ease;
+  }
+  .empty-state .morph span.active{ opacity: 1; }
+
+  .empty-state p{ font-size: 0.9rem; line-height: 1.6; margin-top: 0.8rem; }
+
+  .row{
+    display: flex;
+    width: 100%;
+  }
+
+  .row.user{ justify-content: flex-end; }
+  .row.assistant{ justify-content: flex-start; }
+
+  .bubble{
+    max-width: 82%;
+    padding: 0.9rem 1.15rem;
+    border-radius: 16px;
+    font-size: 1.28rem;
+    line-height: 1.55;
+    font-family: 'Noto Sans Telugu', 'Noto Sans Devanagari', 'Inter', sans-serif;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .row.user .bubble{
+    background: var(--bubble-user);
+    border-top-right-radius: 4px;
+  }
+
+  .row.assistant .bubble{
+    background: var(--bubble-assistant);
+    border: 1px solid var(--border);
+    border-top-left-radius: 4px;
+  }
+
+  .bubble.loading{ color: var(--muted); font-style: italic; font-size: 1rem; }
+  .bubble.error{ color: #e8735a; font-size: 1rem; font-style: normal; }
+
+  .meta-row{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-top: 0.45rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .row.assistant .meta-row{ padding-left: 0.2rem; }
+  .row.user .meta-row{ justify-content: flex-end; padding-right: 0.2rem; }
+
+  .copy-btn{
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+  }
+  .copy-btn:hover{ color: var(--teal); }
+
+  /* ---------- Composer ---------- */
+  .composer-wrap{
+    flex-shrink: 0;
+    padding: 0.9rem 1rem 1.2rem;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .composer{
+    max-width: 760px;
+    margin: 0 auto;
+    display: flex;
+    align-items: flex-end;
+    gap: 0.7rem;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 0.6rem 0.6rem 0.6rem 1.1rem;
+  }
+
+  #inputText{
+    flex: 1;
+    resize: none;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: 'Noto Sans Telugu', 'Noto Sans Devanagari', 'Inter', sans-serif;
+    font-size: 1.1rem;
+    line-height: 1.5;
+    max-height: 160px;
+    padding: 0.5rem 0;
+  }
+
+  #inputText::placeholder{ color: var(--muted); opacity: 0.75; }
+
+  #sendBtn{
+    background: var(--accent);
+    color: #14141f;
+    border: none;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease;
+  }
+
+  #sendBtn:hover{ transform: translateY(-1px); }
+  #sendBtn:disabled{ opacity: 0.5; cursor: default; transform: none; }
+
+  .hint-line{
+    max-width: 760px;
+    margin: 0.6rem auto 0;
+    text-align: center;
+    font-size: 0.76rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .hint-line strong{ color: var(--text); }
+
+  @media (max-width: 620px){
+    .bubble{ font-size: 1.1rem; max-width: 90%; }
+    .topbar{ gap: 0.6rem; }
+    select{ font-size: 0.78rem; padding: 0.45rem 0.6rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="setu">Setu</span><span class="sub">bridge between scripts</span></div>
+  <div class="lang-controls">
+    <select id="sourceLang"><option value="auto">Detect language</option></select>
+    <button id="swapBtn" title="Swap languages">⇄</button>
+    <select id="targetLang"></select>
+  </div>
+</div>
+
+<div class="feed-wrap" id="feedWrap">
+  <div class="feed" id="feed">
+    <div class="empty-state" id="emptyState">
+      <div class="morph" id="morph">
+        <span class="active">translate</span>
+        <span>అనువదించు</span>
+        <span>अनुवाद</span>
+      </div>
+      <p>Type below and hit send. Each translation shows up here like a chat, so you can scroll back through everything you've translated.</p>
+    </div>
+  </div>
+</div>
+
+<div class="composer-wrap">
+  <div class="composer">
+    <textarea id="inputText" placeholder="Type or paste text… e.g. kaise ho" rows="1"></textarea>
+    <button id="sendBtn" title="Translate (Enter)">➤</button>
+  </div>
+  <p class="hint-line">
+    Typing in <strong>romanized</strong> text (Hindi/Telugu written in English letters)? Set <strong>Source</strong> above manually — auto-detect often misreads it as plain English.
+  </p>
+</div>
+
+<script>
+  const LANGUAGES = [
+    ["en", "English"], ["te", "Telugu"], ["hi", "Hindi"], ["ta", "Tamil"],
+    ["kn", "Kannada"], ["ml", "Malayalam"], ["mr", "Marathi"], ["bn", "Bengali"],
+    ["gu", "Gujarati"], ["pa", "Punjabi"], ["ur", "Urdu"], ["es", "Spanish"],
+    ["fr", "French"], ["de", "German"], ["it", "Italian"], ["pt", "Portuguese"],
+    ["ru", "Russian"], ["zh-CN", "Chinese (Simplified)"], ["ja", "Japanese"],
+    ["ko", "Korean"], ["ar", "Arabic"]
+  ];
+
+  const sourceLangEl = document.getElementById("sourceLang");
+  const targetLangEl = document.getElementById("targetLang");
+  const inputEl = document.getElementById("inputText");
+  const sendBtn = document.getElementById("sendBtn");
+  const feed = document.getElementById("feed");
+  const feedWrap = document.getElementById("feedWrap");
+  const emptyState = document.getElementById("emptyState");
+
+  LANGUAGES.forEach(([code, name]) => {
+    const o1 = document.createElement("option"); o1.value = code; o1.textContent = name;
+    sourceLangEl.appendChild(o1);
+    const o2 = document.createElement("option"); o2.value = code; o2.textContent = name;
+    targetLangEl.appendChild(o2);
+  });
+  sourceLangEl.value = "auto";
+  targetLangEl.value = "te";
+
+  document.getElementById("swapBtn").addEventListener("click", () => {
+    if (sourceLangEl.value === "auto") return;
+    const s = sourceLangEl.value, t = targetLangEl.value;
+    sourceLangEl.value = t; targetLangEl.value = s;
+  });
+
+  // auto-grow textarea
+  inputEl.addEventListener("input", () => {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
+  });
+
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  function escapeHtml(str){
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function scrollToBottom(){
+    feedWrap.scrollTop = feedWrap.scrollHeight;
+  }
+
+  function addUserBubble(text){
+    const row = document.createElement("div");
+    row.className = "row user";
+    row.innerHTML = `<div><div class="bubble">${escapeHtml(text)}</div></div>`;
+    feed.appendChild(row);
+  }
+
+  function addAssistantBubble(){
+    const row = document.createElement("div");
+    row.className = "row assistant";
+    row.innerHTML = `<div><div class="bubble loading">Translating…</div></div>`;
+    feed.appendChild(row);
+    return row;
+  }
+
+  async function translateText(text, targetLang, sourceLang){
+    const url = "https://translate.googleapis.com/translate_a/single" +
+      `?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Translation request failed (" + res.status + ")");
+    const data = await res.json();
+    const translated = (data[0] || []).map(seg => seg[0]).join("");
+    const detected = data[2] || sourceLang;
+    return { translated, detected };
+  }
+
+  sendBtn.addEventListener("click", async () => {
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    if (emptyState) { emptyState.remove(); }
+
+    addUserBubble(text);
+    const targetLang = targetLangEl.value;
+    const sourceLang = sourceLangEl.value;
+    const assistantRow = addAssistantBubble();
+    scrollToBottom();
+
+    inputEl.value = "";
+    inputEl.style.height = "auto";
+    sendBtn.disabled = true;
+
+    try {
+      const { translated, detected } = await translateText(text, targetLang, sourceLang);
+      const targetName = (LANGUAGES.find(l => l[0] === targetLang) || [,targetLang])[1];
+      const sourceName = (LANGUAGES.find(l => l[0] === detected) || [,detected])[1];
+      assistantRow.innerHTML = `
+        <div>
+          <div class="bubble">${escapeHtml(translated)}</div>
+          <div class="meta-row">
+            <span>${escapeHtml(sourceName)} → ${escapeHtml(targetName)}</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+        </div>`;
+      assistantRow.querySelector(".copy-btn").addEventListener("click", () => {
+        navigator.clipboard.writeText(translated).then(() => {
+          const btn = assistantRow.querySelector(".copy-btn");
+          const orig = btn.textContent;
+          btn.textContent = "Copied!";
+          setTimeout(() => btn.textContent = orig, 1200);
+        });
+      });
+    } catch (err) {
+      assistantRow.innerHTML = `<div><div class="bubble error">Couldn't translate that: ${escapeHtml(err.message)}</div></div>`;
+    } finally {
+      sendBtn.disabled = false;
+      scrollToBottom();
+    }
+  });
+
+  // Hero word morph in empty state
+  (function morph(){
+    const words = document.querySelectorAll("#morph span");
+    if (!words.length) return;
+    let i = 0;
+    setInterval(() => {
+      if (!document.getElementById("morph")) return;
+      words[i].classList.remove("active");
+      i = (i + 1) % words.length;
+      words[i].classList.add("active");
+    }, 2600);
+  })();
+</script>
+
+</body>
+</html>
