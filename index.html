@@ -276,7 +276,7 @@
 <div class="topbar">
   <div class="brand"><span class="setu">Setu</span><span class="sub">bridge between scripts</span></div>
   <div class="lang-controls">
-    <select id="sourceLang"><option value="auto">Detect language</option></select>
+    <select id="sourceLang"></select>
     <button id="swapBtn" title="Swap languages">⇄</button>
     <select id="targetLang"></select>
   </div>
@@ -301,7 +301,7 @@
     <button id="sendBtn" title="Translate (Enter)">➤</button>
   </div>
   <p class="hint-line">
-    Typing in <strong>romanized</strong> text (Hindi/Telugu written in English letters)? Set <strong>Source</strong> above manually — auto-detect often misreads it as plain English.
+    Always set <strong>Source</strong> to the language you're actually typing in — this matters even more for <strong>romanized</strong> text (Hindi/Telugu written in English letters, like "kaise ho").
   </p>
 </div>
 
@@ -329,11 +329,10 @@
     const o2 = document.createElement("option"); o2.value = code; o2.textContent = name;
     targetLangEl.appendChild(o2);
   });
-  sourceLangEl.value = "auto";
+  sourceLangEl.value = "en";
   targetLangEl.value = "te";
 
   document.getElementById("swapBtn").addEventListener("click", () => {
-    if (sourceLangEl.value === "auto") return;
     const s = sourceLangEl.value, t = targetLangEl.value;
     sourceLangEl.value = t; targetLangEl.value = s;
   });
@@ -377,14 +376,21 @@
   }
 
   async function translateText(text, targetLang, sourceLang){
-    const url = "https://translate.googleapis.com/translate_a/single" +
-      `?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
+    // MyMemory supports CORS for direct calls from a static webpage (no backend needed).
+    // Max 500 bytes per request on the free tier.
+    const params = new URLSearchParams({
+      q: text.slice(0, 500),
+      langpair: `${sourceLang}|${targetLang}`
+    });
+    const url = `https://api.mymemory.translated.net/get?${params}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("Translation request failed (" + res.status + ")");
     const data = await res.json();
-    const translated = (data[0] || []).map(seg => seg[0]).join("");
-    const detected = data[2] || sourceLang;
-    return { translated, detected };
+    if (data.responseStatus && data.responseStatus !== 200) {
+      throw new Error(data.responseDetails || "Translation failed");
+    }
+    const translated = data.responseData ? data.responseData.translatedText : "";
+    return { translated, detected: sourceLang };
   }
 
   sendBtn.addEventListener("click", async () => {
