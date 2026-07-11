@@ -378,7 +378,7 @@
   // MyMemory's free tier caps each request at 500 bytes, so long stories get
   // split into safe-sized chunks (breaking on paragraph/sentence boundaries
   // where possible), translated one by one, then stitched back together.
-  const MAX_CHUNK = 480; // a little under 500 to leave headroom for multi-byte chars
+  const MAX_CHUNK = 490; // just under MyMemory's 500-char limit
 
   function splitIntoChunks(text){
     const paragraphs = text.split(/\n+/);
@@ -433,13 +433,27 @@
     return chunks;
   }
 
-  async function translateChunk(text, targetLang, sourceLang){
+  function sleep(ms){
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function translateChunk(text, targetLang, sourceLang, attempt = 0){
     const params = new URLSearchParams({
       q: text,
       langpair: `${sourceLang}|${targetLang}`
     });
     const url = `https://api.mymemory.translated.net/get?${params}`;
     const res = await fetch(url);
+
+    if (res.status === 429){
+      // Rate-limited — back off and retry a few times before giving up.
+      if (attempt < 4){
+        await sleep(800 * (attempt + 1));
+        return translateChunk(text, targetLang, sourceLang, attempt + 1);
+      }
+      throw new Error("Translation service is rate-limiting requests right now. Try again in a moment, or translate a shorter piece of text.");
+    }
+
     if (!res.ok) throw new Error("Translation request failed (" + res.status + ")");
     const data = await res.json();
     if (data.responseStatus && data.responseStatus !== 200) {
@@ -455,6 +469,8 @@
       if (onProgress) onProgress(i + 1, chunks.length);
       const piece = await translateChunk(chunks[i], targetLang, sourceLang);
       results.push(piece);
+      // Small pause between requests so we don't fire a burst that trips the rate limit.
+      if (i < chunks.length - 1) await sleep(350);
     }
     return { translated: results.join("\n"), detected: sourceLang };
   }
