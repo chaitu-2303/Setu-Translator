@@ -375,11 +375,67 @@
     return row;
   }
 
-  async function translateText(text, targetLang, sourceLang){
-    // MyMemory supports CORS for direct calls from a static webpage (no backend needed).
-    // Max 500 bytes per request on the free tier.
+  // MyMemory's free tier caps each request at 500 bytes, so long stories get
+  // split into safe-sized chunks (breaking on paragraph/sentence boundaries
+  // where possible), translated one by one, then stitched back together.
+  const MAX_CHUNK = 480; // a little under 500 to leave headroom for multi-byte chars
+
+  function splitIntoChunks(text){
+    const paragraphs = text.split(/\n+/);
+    const chunks = [];
+    let current = "";
+
+    function flush(){
+      if (current) { chunks.push(current); current = ""; }
+    }
+
+    for (const para of paragraphs){
+      if (para.length === 0){ continue; }
+
+      // If a single paragraph already fits with the current buffer, just append it.
+      const candidate = current ? current + "\n" + para : para;
+      if (candidate.length <= MAX_CHUNK){
+        current = candidate;
+        continue;
+      }
+
+      // Current buffer is full — flush it, then handle this paragraph on its own.
+      flush();
+
+      if (para.length <= MAX_CHUNK){
+        current = para;
+        continue;
+      }
+
+      // Paragraph itself is too long — split on sentence boundaries.
+      const sentences = para.match(/[^.!?]+[.!?]+|\S+$/g) || [para];
+      let buf = "";
+      for (const sentence of sentences){
+        const cand2 = buf ? buf + " " + sentence : sentence;
+        if (cand2.length <= MAX_CHUNK){
+          buf = cand2;
+        } else {
+          if (buf) chunks.push(buf);
+          // Even a single sentence can exceed the limit — hard-slice it.
+          if (sentence.length > MAX_CHUNK){
+            for (let i = 0; i < sentence.length; i += MAX_CHUNK){
+              chunks.push(sentence.slice(i, i + MAX_CHUNK));
+            }
+            buf = "";
+          } else {
+            buf = sentence;
+          }
+        }
+      }
+      if (buf) chunks.push(buf);
+    }
+    flush();
+    return chunks;
+  }
+
+  async function translateChunk(text, targetLang, sourceLang){
     const params = new URLSearchParams({
-      q: text.slice(0, 500),
+      q: text,
       langpair: `${sourceLang}|${targetLang}`
     });
     const url = `https://api.mymemory.translated.net/get?${params}`;
@@ -389,8 +445,18 @@
     if (data.responseStatus && data.responseStatus !== 200) {
       throw new Error(data.responseDetails || "Translation failed");
     }
-    const translated = data.responseData ? data.responseData.translatedText : "";
-    return { translated, detected: sourceLang };
+    return data.responseData ? data.responseData.translatedText : "";
+  }
+
+  async function translateText(text, targetLang, sourceLang, onProgress){
+    const chunks = splitIntoChunks(text);
+    const results = [];
+    for (let i = 0; i < chunks.length; i++){
+      if (onProgress) onProgress(i + 1, chunks.length);
+      const piece = await translateChunk(chunks[i], targetLang, sourceLang);
+      results.push(piece);
+    }
+    return { translated: results.join("\n"), detected: sourceLang };
   }
 
   sendBtn.addEventListener("click", async () => {
@@ -410,7 +476,12 @@
     sendBtn.disabled = true;
 
     try {
-      const { translated, detected } = await translateText(text, targetLang, sourceLang);
+      const { translated, detected } = await translateText(text, targetLang, sourceLang, (done, total) => {
+        if (total > 1){
+          const loadingEl = assistantRow.querySelector(".bubble");
+          if (loadingEl) loadingEl.textContent = `Translating… (${done}/${total})`;
+        }
+      });
       const targetName = (LANGUAGES.find(l => l[0] === targetLang) || [,targetLang])[1];
       const sourceName = (LANGUAGES.find(l => l[0] === detected) || [,detected])[1];
       assistantRow.innerHTML = `
